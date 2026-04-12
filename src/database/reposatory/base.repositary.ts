@@ -5,7 +5,6 @@ import {
     QueryFilter,
     UpdateQuery,
     QueryOptions,
-    UpdateQuery as UpdateOptions
 } from "mongoose";
 
 export class DatabaseRepository<TRawDocs> {
