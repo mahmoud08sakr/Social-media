@@ -8,13 +8,16 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const modules_1 = require("./modules");
 const middleware_1 = require("./middleware");
-const bootstrap = () => {
+const env_service_1 = require("./config/env.service");
+const connection_1 = __importDefault(require("./database/connection"));
+const bootstrap = async () => {
     const app = (0, express_1.default)();
     app.use((0, cors_1.default)(), express_1.default.json());
+    await (0, connection_1.default)();
     app.use('/auth', modules_1.authRouter);
     app.use(middleware_1.globalErrorHandler);
-    app.listen(3000, () => {
-        console.log('server is running on port 3000');
+    app.listen(env_service_1.env.port, () => {
+        console.log(`server is running on port ${env_service_1.env.port}`);
     });
 };
 exports.bootstrap = bootstrap;

@@ -9,13 +9,12 @@ const success_responce_1 = require("../../common/exceptions/success.responce");
 const auth_validation_1 = require("./auth.validation");
 const validation_middleware_1 = require("../../middleware/validation.middleware");
 const router = (0, express_1.Router)();
-router.post('/login', (req, res) => {
-    const data = auth_service_1.default.login(req.body);
-    console.log(data);
+router.post('/login', async (req, res) => {
+    const data = await auth_service_1.default.login(req.body);
     (0, success_responce_1.SuccessResponce)({ res, message: 'login', status: 201, data });
 });
-router.post('/signup', (0, validation_middleware_1.validation)(auth_validation_1.signupSchema), (req, res) => {
-    const data = auth_service_1.default.signup(req.body);
+router.post('/signup', (0, validation_middleware_1.validation)(auth_validation_1.signupSchema), async (req, res) => {
+    const data = await auth_service_1.default.signup(req.body);
     res.json({ message: 'signup', data });
 });
 exports.default = router;

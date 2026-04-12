@@ -8,14 +8,13 @@ import { validation } from "../../middleware/validation.middleware";
 const router = Router();
 
 
-router.post('/login', (req: Request, res: Response) => {
-    const data = authService.login(req.body)
-    console.log(data);
+router.post('/login', async (req: Request, res: Response) => {
+    const data = await authService.login(req.body)
     SuccessResponce({ res, message: 'login', status: 201, data })
 })
 
-router.post('/signup',validation(signupSchema), (req: Request, res: Response) => {
-    const data = authService.signup(req.body)
+router.post('/signup', validation(signupSchema), async (req: Request, res: Response) => {
+    const data = await authService.signup(req.body)
     res.json({ message: 'signup', data })
 })
 

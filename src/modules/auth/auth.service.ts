@@ -1,21 +1,29 @@
-import { ApplicationException } from "../../common/exceptions/application.exception";
+import { HydratedDocument, Model } from "mongoose";
+import { ApplicationException, BadRequestException } from "../../common/exceptions/application.exception";
 import { LoginDTO, SignupDTO } from "./auth.dto";
+import { IUser } from "../../common/interfaces";
+import userModel from '../../database/model/user.model'
+import { DatabaseRepository } from "../../database/reposatory/base.repositary";
 
 
 class AuthService {
+    private userModel: Model<IUser>
+    private userRepository: DatabaseRepository<IUser>
     constructor() {
-
+        this.userModel = userModel
+        this.userRepository = new DatabaseRepository(this.userModel)
     }
 
-    login(data: any): any {
-        // console.log(fcghjk);
-        
-        // throw new ApplicationException('Method not implemented.', 400);
-        return data
+    async login(data: LoginDTO): Promise<HydratedDocument<IUser> | null> {
+        let result = await this.userRepository.findOne({ email: data.email, password: data.password }, {password: 0  , email: 0 , firstName:0})
+        return result
     }
-
-    signup(data: SignupDTO): SignupDTO {
-        return data
+    async signup(data: SignupDTO): Promise<IUser> {
+        let result: HydratedDocument<IUser> = await this.userRepository.create(data)
+        if (!result) {
+            throw new BadRequestException('User not created')
+        }
+        return result
     }
 }
 
