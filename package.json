@@ -12,6 +12,8 @@
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/redis": "^4.0.10",
     "concurrently": "^9.2.1"
   },
   "dependencies": {
@@ -19,11 +21,15 @@
     "@types/dotenv": "^6.1.1",
     "@types/express": "^5.0.6",
     "@types/mongoose": "^5.11.96",
+    "@types/nodemailer": "^8.0.0",
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "cross-env": "^10.1.0",
     "dotenv": "^17.4.1",
     "express": "^5.2.1",
     "mongoose": "^9.4.1",
+    "nodemailer": "^8.0.5",
+    "redis": "^5.12.1",
     "zod": "^4.3.6"
   }
 }

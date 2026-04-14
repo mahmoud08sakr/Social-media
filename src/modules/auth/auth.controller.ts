@@ -19,6 +19,11 @@ router.post('/signup', validation(signupSchema), async (req: Request, res: Respo
 })
 
 
+router.put('/verify-email', async (req: Request, res: Response) => {
+    const data = await authService.verifyEmail(req.body)
+    SuccessResponce({ res, message: 'verify-email', status: 201, data })
+
+})
 
 
 export default router

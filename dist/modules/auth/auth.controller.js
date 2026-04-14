@@ -17,4 +17,8 @@ router.post('/signup', (0, validation_middleware_1.validation)(auth_validation_1
     const data = await auth_service_1.default.signup(req.body);
     res.json({ message: 'signup', data });
 });
+router.put('/verify-email', async (req, res) => {
+    const data = await auth_service_1.default.verifyEmail(req.body);
+    (0, success_responce_1.SuccessResponce)({ res, message: 'verify-email', status: 201, data });
+});
 exports.default = router;
