@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.redisService = exports.RedisService = void 0;
 const redis_1 = require("redis");
 const env_service_1 = require("../../config/env.service");
-const application_exception_1 = require("../exceptions/application.exception");
 class RedisService {
     client;
     constructor() {
@@ -33,9 +32,6 @@ class RedisService {
     };
     get = async (key) => {
         let data = await this.client.get(key);
-        if (!data) {
-            throw new application_exception_1.NotFoundException('key not found');
-        }
         try {
             data = JSON.parse(data);
         }

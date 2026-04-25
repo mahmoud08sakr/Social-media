@@ -39,11 +39,8 @@ export class RedisService {
 
     get = async (key: string): Promise<string | null> => {
         let data = await this.client.get(key)
-        if (!data) {
-            throw new NotFoundException('key not found')
-        }
         try {
-            data = JSON.parse(data)
+            data = JSON.parse(data!)
         } catch (error) { }
         return data
     }

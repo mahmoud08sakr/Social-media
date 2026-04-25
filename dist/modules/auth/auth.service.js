@@ -6,30 +6,40 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const application_exception_1 = require("../../common/exceptions/application.exception");
 const user_model_1 = __importDefault(require("../../database/model/user.model"));
 const base_repositary_1 = require("../../database/reposatory/base.repositary");
+const security_1 = require("../../common/utils/security");
 const securety_service_1 = require("../../common/services/securety.service");
 const sendEmail_1 = require("../../common/utils/email/sendEmail");
 const redis_service_1 = require("../../common/services/redis.service");
+const enums_1 = require("../../common/enums");
+const token_service_1 = require("../../common/services/token.service");
+const google_auth_library_1 = require("google-auth-library");
 class AuthService {
     userModel;
     userRepository;
     securetyService;
     redisService;
+    tokenService;
     constructor() {
         this.userModel = user_model_1.default;
         this.userRepository = new base_repositary_1.DatabaseRepository(this.userModel);
         this.securetyService = new securety_service_1.SecurityService;
         this.redisService = redis_service_1.redisService;
+        this.tokenService = new token_service_1.TokenService;
     }
     async login(data) {
-        let result = await this.userRepository.findOne({ email: data.email }, { email: 0, firstName: 0 });
-        if (!result) {
-            throw new application_exception_1.NotFoundException("user not found");
+        let { email, password } = data;
+        let exsistUser = await this.userRepository.findOne({ email, provider: enums_1.ProviderEnum.System });
+        if (exsistUser) {
+            const isMatched = await (0, security_1.compareHash)({ planText: password, cypherText: exsistUser.password });
+            if (isMatched) {
+                let { accessToken, refreshToken } = this.tokenService.genetareToken(exsistUser);
+                return { exsistUser, accessToken, refreshToken };
+            }
+            else {
+                throw new application_exception_1.BadRequestException("password not matched");
+            }
         }
-        let matchedPassword = await this.securetyService.compareHash({ planText: data.password, cypherText: result.password });
-        if (!matchedPassword) {
-            throw new application_exception_1.BadRequestException("password not matched");
-        }
-        return result;
+        return new application_exception_1.NotFoundException("User Not Found");
     }
     async signup(data) {
         data.password = await this.securetyService.generateHash({ planText: data.password });
@@ -72,6 +82,39 @@ class AuthService {
             throw new application_exception_1.BadRequestException("code not matched ");
         }
         return user;
+    }
+    async signupMail(token) {
+        console.log(token);
+        const client = new google_auth_library_1.OAuth2Client();
+        const ticket = await client.verifyIdToken({
+            idToken: token.idToken,
+            audience: "12909487230-8po2bsrb5hg1p4ucar23jjsc8qie6ob9.apps.googleusercontent.com"
+        });
+        const payload = ticket.getPayload();
+        console.log(payload);
+        if (!payload || !payload.email) {
+            throw new application_exception_1.BadRequestException("something went wrong");
+        }
+        if (!payload.email_verified) {
+            throw new application_exception_1.BadRequestException("email not verified");
+        }
+        let exsistUser = await this.userRepository.findOne({ email: payload.email });
+        if (exsistUser) {
+            throw new application_exception_1.ConflictException("user already exsist");
+        }
+        else {
+            let addedUser = await this.userRepository.create({
+                userName: payload.name,
+                email: payload.email,
+                provider: enums_1.ProviderEnum.Google
+            });
+            if (addedUser) {
+                return addedUser;
+            }
+            else {
+                throw new application_exception_1.BadRequestException("something went wrong");
+            }
+        }
     }
 }
 exports.default = new AuthService;
