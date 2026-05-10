@@ -1,0 +1,584 @@
+
+npm i @aws-sdk/s3-request-presigner
+npm i @aws-sdk/lib-storage
+npm i @aws-sdk/client-s3
+
+
+==========================================1-DEPEBDENCIES
+1.1-npm i multer
+
+1.2-npm i @aws-sdk/client-s3
+ 	   => DOC => https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/Package/-aws-sdk-client-s3/?utm\_source=chatgpt.com
+
+1.3 npm i @aws-sdk/lib-storage
+ 	   => DOC => https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/Package/-aws-sdk-lib-storage/?utm\_source=chatgpt.com
+
+1.4 npm i @aws-sdk/s3-request-presigner
+ 	  => DOC => https://docs.aws.amazon.com/AWSJ
+
+
+
+-------------------------------SETUPS
+2-Config S3
+3.1 use multer memeroryStorge 
+3.2 setup S3 connection   =>  create  s3.js file in utils folder then
+
+import { S3Client } from '@aws-sdk/client-s3';
+
+export const s3Config = () => {
+  return new S3Client({
+    region: process.env.AWS_REGION as string,
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID as string,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY as string,
+    },
+  });
+};
+
+
+---------------------------------------LIST OF S3 API---------
+
+| Action               | SDK Command                     |
+| -------------------- | ------------------------------- |
+| Upload one/many      | `PutObjectCommand`              |
+| GET one              | `GetObjectCommand`              |
+| Delete one           | `DeleteObjectCommand`           |
+| Delete many          | `DeleteObjectsCommand`          |
+| List files by folder | `ListObjectsV2Command`          |
+| Generate signed URL  | `getSignedUrl()`                |
+| Create “folder”      | `PutObjectCommand` with `/` key |
+
+
+----------------------------------------
+3-Build upload single file  Not that s3 doesn't support multi file upload at once
+**************************important not
+for files more than 50MB use diskstorage instead of  memory  with createReadStream(filepath)  instead of  file.buffer
+------------------------------------UPLOAD FILE
+export const uploadFile = async ({
+  store = StorageEnum.memory,
+  Bucket = process.env.S3_BUCKET_NAME as string,
+  path = "general",
+  ACL = "private" as ObjectCannedACL,
+  file,
+}: {
+  store?: StorageEnum;
+  Bucket?: string;
+  path?: string | undefined;
+  ACL?: ObjectCannedACL;
+  file: Express.Multer.File;
+}): Promise<string> => {
+  const command = new PutObjectCommand({
+    Bucket,
+    Key: `${
+      process.env.APPLICATION_NAME
+    }/${path}/${Date.now()}__${Math.random()}/${file.originalname}`,
+    ACL,
+    Body:
+      store === StorageEnum.memory ? file.buffer : createReadStream(file.path),
+    ContentType: file.mimetype,
+  });
+
+  await s3Config().send(command);
+  if (!command.input?.Key) {
+    throw new BadRequestException("Fail to upload", { file });
+  }
+  return command.input.Key;
+};
+-----------------------------------------
+Also we can handle multi upload
+-----------------------------------------
+//note clarify why promise all vs for of vs foreach
+export const uploadFiles = async ({
+  files,
+  store = StorageEnum.memory,
+  path = "general",
+  Bucket = process.env.S3_BUCKET_NAME as string,
+  ACL = "private" as ObjectCannedACL,
+}: {
+  store?: StorageEnum;
+  Bucket?: string;
+  path?: string;
+  ACL?: ObjectCannedACL;
+  files: Express.Multer.File[];
+}): Promise<string[] | any> => {
+
+  const urls: string[] = await Promise.all(
+    files.map((file) => uploadFile({ store, Bucket, ACL, path, file }))
+  );
+  return urls;
+};
+
+=========================================for larger files more than 5GB=======================================================
+
+4-npm i @aws-sdk/lib-storage   => for larger files more than 5GB
+
+
+Question
+Why we need   npm i @aws-sdk/lib-storage upload method   instead of  PutObjectCommand ?
+
+
+
+Answer
+
+- S3 expects to receive the entire file in one go. This works well for small files (e.g. <100 MB), but it becomes: Slow for large files
+
+- Memory-intensive (uses your server’s RAM)
+
+- Risky — if upload fails mid-way, the entire file must be resent
+
+- Impossible for files larger than 5 GB, since PutObject has a limit
+
+
+Question
+How to implemt it?
+
+Answer
+import { Upload } from "@aws-sdk/lib-storage";
+
+export const uploadLargeFile = async ({
+  store = StorageEnum.memory,
+  Bucket = process.env.S3_BUCKET_NAME as string,
+  path = "general",
+  ACL = "private" as ObjectCannedACL,
+  file,
+}: {
+  store?: StorageEnum;
+  Bucket?: string;
+  path?: string | undefined;
+  ACL?: ObjectCannedACL;
+  file: Express.Multer.File;
+}): Promise<CompleteMultipartUploadCommandOutput> => {
+  const upload = new Upload({
+    client: s3Config(),
+    params: {
+      Bucket,
+      Key: `${
+        process.env.APPLICATION_NAME
+      }/${path}/${Date.now()}__${Math.random()}_250/${file.originalname}`,
+      ACL,
+      Body:
+        store === StorageEnum.memory
+          ? file.buffer
+          : createReadStream(file.path),
+      ContentType: file.mimetype,
+    },
+  });
+
+  upload.on("httpUploadProgress", (progress) => {
+    console.log(`File upload progress is ::: `, progress);
+  });
+  return await upload.done();
+};
+
+What it does:
+-Splits the file into 5MB+ parts
+-each part separately in parallel
+
+	-Retries failed parts automatically
+
+	-Resumes uploads (optionally) if interrupted
+
+	-Much more efficient for anything +100MB
+
+
+------------------------------------------------------------------
+===================================================== Compare  PutObjectCommand vs Upload ==================================================
+
+| `PutObjectCommand`   | `Upload` (Multipart Upload) |
+| -------------------- | --------------------------- |
+| Simple, direct       | Smart, scalable             |
+| Good for small files | Best for large files        |
+| No retries/resume    | Retries and parallel parts  |
+| Max size = 5GB       | Max size = 5TB              |
+
+
+============================================================================GET FILE
+5-GET file
+export const getFile = async ({
+  Bucket = process.env.S3_BUCKET_NAME as string,
+  Key,
+}: {
+  Bucket?: string;
+  Key: string;
+}): Promise<GetObjectCommandOutput> => {
+  const command = new GetObjectCommand({
+    Bucket,
+    Key,
+  });
+  return await s3Config().send(command);
+};
+
+//app.contoller
+
+import { promisify } from "node:util";
+import { pipeline } from "node:stream";
+const writePipeLine = promisify(pipeline);
+///////////////////////////////////////////////////////other router solution 
+app.get("/upload{/*assetPath}", (req: Request, res: Response) => {
+    if (!req.params?.assetPath) {
+      throw new BadRequestException("missing asset url")
+    }
+    const assetPath = req.params.assetPath  as unknown as string[] ; // this will contain the full path after /upload/
+    const Key = assetPath.join("/");
+    return res.status(200).json({
+      message: "Got S3 key successfully",
+      Key,
+    });
+});
+/////////////////////////////////////////
+
+app.get("/upload", async (req: Request, res: Response) => {
+    const key = req.query.key as string;
+    if (!key) {
+      throw new BadRequestException("missing resource key");
+    }
+    const s3Response = await getFile({ Key: key });
+    if (!s3Response?.Body) {
+      throw new BadRequestException("fail to fetch this resource");
+    }
+    res.setHeader(
+      "Content-Type",
+      s3Response.ContentType || "application/octet-stream"
+    );
+      res.set("Cross-Origin-Resource-Policy", "cross-origin");
+  
+    //  res.setHeader("Content-Disposition", `attachment; filename="${req.query.key.split("/").pop()}"`); // only apply it for  download
+
+    await writePipeLine(s3Response.Body as NodeJS.ReadableStream, res);
+});
+
+
+======================================================================LIST ALL FILES INSIDE DIRECTORY
+6-LIST ALL FILES INSIDE DIRECTORY
+
+export const listFiles = async ({
+  Bucket = process.env.S3_BUCKET_NAME as string,
+  folderKey,
+}: {
+  Bucket?: string;
+  folderKey: string;
+}) => {
+  const command = new ListObjectsV2Command({
+    Bucket,
+    Prefix: `${process.env.APPLICATION_NAME}/${folderKey}`,
+  });
+
+  const objectList = await s3Config().send(command);
+  console.log({ objectList });
+  return objectList;
+};
+
+
+=====================================================================DELETE SINGLE FILE
+7-DELETE SINGLE FILE
+export const deleteFile = async ({
+  Bucket = process.env.S3_BUCKET_NAME as string,
+  Key,
+}: {
+  Bucket?: string;
+  Key: string;
+}): Promise<DeleteObjectCommandOutput> => {
+  const command = new DeleteObjectCommand({
+    Bucket,
+    Key,
+  });
+  return await s3Config().send(command);
+};
+
+=====================================================================DELETE MULTI FILES
+8-DELETE MULTI FILES
+-------------------------------------------------------------------NOTE
+//NOTE up to 1000 objects max per call.
+// const keysToDelete = [
+//   { Key: "uploads/file1.jpg" },
+//   { Key: "uploads/file2.jpg" },
+//   { Key: "uploads/folder/file3.png" },
+// ];
+-------------------------------------------------------------------NOTE
+export const deleteFiles = async ({
+  Bucket = process.env.S3_BUCKET_NAME,
+  keysToDelete,
+  Quiet = false,
+}: {
+  Bucket?: string;
+  keysToDelete: string[];
+  Quiet?: boolean;
+}): Promise<DeleteObjectsCommandOutput> => {
+  const mappedKeysToDelete: { Key: string }[] = keysToDelete.map((Key) => {
+    return { Key };
+  });
+
+  const command = new DeleteObjectsCommand({
+    Bucket,
+    Delete: {
+      Objects: mappedKeysToDelete,
+      Quiet,
+    },
+  });
+  const result = await s3Config().send(command);
+  console.log(result);
+  return result;
+};
+
+=====================================================================DELETE BY FOLDER PREFIX
+9-DELETE BY FOLDER PREFIX
+
+export const deleteFolderContent = async ({
+  Bucket = process.env.S3_BUCKET_NAME as string,
+  Quiet = false,
+  folderKey,
+}: {
+  Bucket?: string;
+  Quiet?: boolean;
+  folderKey: string;
+}) => {
+  const objects = await listFiles({ Bucket, folderKey });
+  const keysToDelete: string[] = objects.Contents?.map((obj) => {
+    return obj.Key;
+  }) as string[];
+  console.log({ keysToDelete });
+  return await deleteFiles({ Bucket, keysToDelete, Quiet });
+};
+
+
+=======================================================================Pre signed URL
+WHY?
+
+| Category                    | Pros ✅                                                                  | Cons ❌                                                              |
+| --------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+|  Security                   | - Secure temporary access without exposing credentials                   | - Anyone with the URL can use it within the valid time                |
+| Expiration Control          | - Can set custom expiration time (e.g., minutes or hours)                | - Cannot revoke URL early unless you delete the object                |
+| Granular Permissions        | - Specify HTTP method (`GET`, `PUT`, etc.) and object key                | - Cannot apply fine-grained permissions beyond basic action + time    |
+| No User IAM Needed**        | - Clients (e.g., browsers/mobile) don't need AWS credentials             | - Must securely deliver the URL to the client                         |
+| Performance                 | - Direct access avoids server proxying (faster and less load on backend) | - No download/upload progress control unless handled on client        |
+| Simplicity                  | - Simple to implement with AWS SDK                                       | - Incorrect configuration leads to broken or insecure links           |
+| Monitoring                  | - No server overhead for file access                                     | - Harder to log or track usage without enabling CloudTrail or S3 logs |
+| Use Case Flexibility        | - Works for uploads, downloads, limited sharing                          | - Not ideal for long-term or frequently revoked access control        |
+
+HOW?
+ 
+npm i @aws-sdk/s3-request-presigner
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
+//Create upload  presignedUrl
+//PUT method
+export const createUploadPresignedUrl = async ({
+  Bucket = process.env.S3_BUCKET_NAME as string,
+  path = "general",
+  originalname,
+  mimetype,
+  expiresIn = 3600,
+}: {
+  Bucket?: string;
+  path?: string;
+  originalname: string;
+  mimetype: string;
+  expiresIn?: number;
+}) => {
+  const Key =
+    `${process.env.APPLICATION_NAME}/${path}/` +
+    Date.now() +
+    "-" +
+    originalname;
+  const command = new PutObjectCommand({
+    Bucket,
+    Key,
+    ContentType: mimetype,
+  });
+  const url = await getSignedUrl(s3Config(), command, { expiresIn }); // expires in 30 min
+  return { url, Key };
+};
+
+
+==============create get presigned url
+
+export const createGetPresignedUrl = async ({
+  Bucket = process.env.S3_BUCKET_NAME as string,
+  Key,
+  expiresIn = 60,
+  downloadName="general.jpg",
+}: {
+  Bucket?: string;
+  Key: string;
+  expiresIn?: number;
+  downloadName?: string;
+}) => {
+  const command = new GetObjectCommand({
+    Bucket,
+    Key,
+    ResponseContentDisposition: `attachment; filename="${
+      downloadName || Key.split("/").pop()
+    }"`,
+  });
+  const url = await getSignedUrl(s3Config(), command, { expiresIn }); // expires in 60 seconds
+  return url;
+};
+
+==========================================================================================11-Pricing
+
+🔢 AWS S3 Request Pricing (as of mid-2025)
+Prices vary by region, but here’s a general idea (for us-east-1):
+
+| Request Type        | Price per 1,000 Requests | Notes                                    |
+| ------------------- | ------------------------ | ---------------------------------------- |
+| **PUT, POST, LIST** | \$0.005                  | Used for uploads and object listing      |
+| **GET, SELECT**     | \$0.0004                 | Used for downloading/viewing files       |
+| **DELETE**          | **Free**                 | AWS doesn’t charge for DELETE operations |
+
+
+EX:
+
+| Request Type | Requests per Day | Monthly Requests | Monthly Cost             |
+| ------------ | ---------------- | ---------------- | ------------------------ |
+| PUT          | 10,000           | 300,000          | 300   * $0.005 = \$1.5   |
+| GET          | 100,000          | 3,000,000        | 3000  *  $0.0004 = \$1.2 |
+| DELETE       | 5,000            | 150,000          | Free                     |
+
+=========================================================================================MULTER
+import { Request } from "express";
+import multer, { FileFilterCallback } from "multer";
+import { BadRequestException } from "../response/error.response";
+import os from "node:os";
+
+export enum StorageEnum {
+  disk = "disk",
+  memory = "memory",
+}
+
+export const fileValidation = {
+  image: ["image/jpeg", "image/png", "image/gif"],
+};
+
+export const cloudFileUpload = ({
+  store = StorageEnum.memory,
+  validation = [],
+  maxFileSizeMB = 2,
+}: {
+  store?: StorageEnum;
+  validation: string[];
+  maxFileSizeMB?: number;
+}) => {
+  const storage =
+    store === StorageEnum.memory
+      ? multer.memoryStorage()
+      : multer.diskStorage({
+          destination: os.tmpdir(), // temporary folder
+          filename: (req, file, cb) =>
+            cb(null, `${Date.now()}-${file.originalname}`),
+        });
+
+
+  function fileFilter(
+    req: Request,
+    file: Express.Multer.File,
+    callback: FileFilterCallback
+  ) {
+    if (!validation.includes(file.mimetype)) {
+      return callback(new BadRequestException("IN-valid file format"));
+    }
+
+    return callback(null, true);
+  }
+
+
+  return multer({
+    fileFilter,
+    limits: { fileSize: maxFileSizeMB * 1024 * 1024 },
+    storage,
+  });
+
+  
+};
+
+
+
+=============================================
+
+  page = Math.floor(page < 1 ? 1 : page);
+    limit = Math.floor(limit < 1 ? 5 : limit);
+    const skip = (page - 1) * limit;
+    options.messages = { $slice: [-limit * page, limit] };
+===================================================LAMBDA FUNCTION AWS TRIGGER S3
+////NOTE this file for simulate s3 trigger with lambda
+
+
+
+
+
+
+
+
+
+import { MongoClient } from "mongodb";
+
+const MONGO_URI = "mongodb://localhost:27017";
+const DB_NAME = "Enhance_demo";
+
+let client;
+
+const connectDB = async () => {
+    if (!client) {
+        client = new MongoClient(MONGO_URI);
+        await client.connect();
+    }
+    return client;
+};
+
+export const handler = async (event) => {
+    const client = await connectDB();
+    const db = client.db(DB_NAME);
+    const requests = db.collection("bsa_requests");
+
+    for (const record of event.Records) {
+        try {
+            let fullKey = decodeURIComponent(
+                record.s3.object.key.replace(/\+/g, " ")
+            );
+
+            console.log("S3 key:", fullKey);
+
+            const parts = fullKey.split("/");
+
+            /*
+              BSA_PROJECT / Request / customId / projectAttachments / file.jpg
+            */
+
+            const customId = parts[2];
+            const attachmentType = parts[3];
+            const fileName = parts[4];
+
+            if (!customId || !attachmentType || !fileName) {
+                console.log("Invalid key format:", fullKey);
+                continue;
+            }
+            console.log({ fullKey });
+
+            const result = await requests.updateOne(
+                { customId },
+                {
+                    $set: {
+                        [`${attachmentType}.$[elem].status`]: "uploaded",
+                        updatedAt: new Date(),
+                    },
+                },
+                {
+                    arrayFilters: [
+                        { "elem.key": fullKey }
+                    ],
+                }
+            );
+
+            console.log({
+                customId,
+                attachmentType,
+                matched: result.matchedCount,
+                modified: result.modifiedCount,
+            });
+
+        } catch (error) {
+            console.error("Lambda error for record:", error);
+        }
+    }
+
+    return { statusCode: 200 };
+};

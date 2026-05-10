@@ -3,3 +3,11 @@
 /.env.dev
 *.csv
 .env
+
+dist
+./dist
+
+postman
+.postman
+
+ 

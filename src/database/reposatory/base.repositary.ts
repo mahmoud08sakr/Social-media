@@ -55,7 +55,7 @@ export class DatabaseRepository<TRawDocs> {
         populate?: PopulateOptions | PopulateOptions[]
     ) {
         let query = this.model.findOneAndUpdate(filter, update, {
-            new: true,
+            returnDocument: "after",
             ...options
         });
         if (select) query = query.select(select);

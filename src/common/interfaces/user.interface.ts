@@ -14,5 +14,6 @@ export interface IUser {
     provider?: ProviderEnum;
     confirmEmail: boolean;
     createdAt?: Date;
-    updatedAt?: Date
+    updatedAt?: Date;
+    tokens?:string[]
 }
