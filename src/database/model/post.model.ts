@@ -3,20 +3,20 @@ import { IPost } from "../../common/interfaces";
 import { VisabilityEnum } from "../../common/enums";
 
 const postSchema = new mongoose.Schema<IPost>({
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-    attacments: [{
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" , required : true},
+    attachments: [{
         type: String
     }],
     content: {
         type: String,
-        required: function () {
-            return this.attacments?.length == 0
+        required: function (this) {
+            return this.attachments?.length == 0
         }
     },
-    likes: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User"
-    }],
+    // likes: [{
+    //     type: mongoose.Schema.Types.ObjectId,
+    //     ref: "User"
+    // }],
     tags: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: "User"

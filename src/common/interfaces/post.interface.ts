@@ -5,14 +5,13 @@ import { VisabilityEnum } from "../enums";
 
 export interface IPost {
    userId : string | IUser,
-   content? : string  ,
-   attacments? : string[] ,
+   content? : string | undefined  ,
+   attachments? : string[] | undefined,
    tags? : string[] | IUser[] ,
-   likes? : string[] | IUser[],
    updateAt : Date,
    createdAt : Date,
    deleatedAt? : Date
    restoredAt? : Date
-   visability : VisabilityEnum
+   visability : VisabilityEnum | undefined
 
 }

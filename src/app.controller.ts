@@ -13,6 +13,7 @@ import { BadRequestException } from "./common/exceptions/application.exception"
 import { pipeline } from 'stream'
 import { promisify } from 'util'
 import { s3Service } from "./common/services/s3.service"
+import { postRouter } from "./modules/post"
 const s3GetFile = promisify(pipeline)
 export const bootstrap = async () => {
     const app: Express = express()
@@ -75,6 +76,7 @@ export const bootstrap = async () => {
     })
     app.use('/auth', authRouter)
     app.use('/users', userRouter)
+    app.use('/posts', postRouter)
     app.use(globalErrorHandler)
     app.listen(env.port, () => {
         console.log(`server is running on port ${env.port}`);

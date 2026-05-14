@@ -95,7 +95,7 @@ export class S3Service {
         ACL?: ObjectCannedACL,
         contentType?: string,
         originalname?: string
-    }): Promise<{ Key: String, result: String[] }> {
+    }): Promise<{ Key: String, result: string[] }> {
         const Key = `socialMedia/${path}/${Math.round(Math.random() * 1e9)}-${originalname}`
         const result = await Promise.all(files.map(item => {
             {

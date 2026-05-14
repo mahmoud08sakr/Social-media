@@ -25,7 +25,7 @@ export class TokenService {
         }
         let accessToken = jwt.sign({ id: user._id }, signature, {
             audience,
-            expiresIn: "30m"
+            expiresIn: "30y"
         })
         let refreshToken = jwt.sign({ id: user._id }, refreshSignature, {
             expiresIn: "1y",

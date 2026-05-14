@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { Types } from "mongoose";
 import { IUser } from "../../common/interfaces";
 import { GenderEnum, ProviderEnum, RoleEnum } from "../../common/enums";
 
@@ -23,6 +23,10 @@ const userSchema = new mongoose.Schema<IUser>({
     },
     tokens : [{
         type : String
+    }],
+    frindes : [{
+        type : Types.ObjectId,
+        ref : "User"
     }]
 }, {
     timestamps: true,
